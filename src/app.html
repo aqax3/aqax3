@@ -1,0 +1,761 @@
+<title>Putting Log</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen phone app. Header, scrolling view, bottom tab bar. Basket-band yellow marks the one primary action. */
+:root {
+  --bg: #EBF0EA;
+  --surface: #FFFFFF;
+  --surface-2: #DFE6DE;
+  --fg: #14201A;
+  --muted: #56665C;
+  --line: #C9D3C9;
+  --accent: #F2B705;
+  --on-accent: #1B1500;
+  --made: #1C8150;
+  --made-soft: #D3EEDD;
+  --miss: #B9433A;
+  --track: #DCE3DB;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1411; --surface: #17201B; --surface-2: #212B25; --fg: #E5ECE6; --muted: #93A398;
+    --line: #2B3730; --accent: #F5C430; --on-accent: #1B1500; --made: #47C283; --made-soft: #173A27;
+    --miss: #EE7266; --track: #26312A; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1411; --surface: #17201B; --surface-2: #212B25; --fg: #E5ECE6; --muted: #93A398;
+  --line: #2B3730; --accent: #F5C430; --on-accent: #1B1500; --made: #47C283; --made-soft: #173A27;
+  --miss: #EE7266; --track: #26312A; color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: inherit; }
+body {
+  height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-block: 12px 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 1.45rem; letter-spacing: .01em; }
+.brand svg { width: 26px; height: 26px; color: var(--made); }
+.sync { font-size: .75rem; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sync::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.sync[data-state="synced"]::before { background: var(--made); }
+.sync[data-state="error"]::before { background: var(--miss); }
+
+.view {
+  flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  padding-block: 4px 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 18px;
+}
+.label { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; margin: 0; text-wrap: balance; }
+.num { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+
+/* Distance */
+.dist { display: flex; flex-direction: column; gap: 10px; }
+.dist-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button {
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+  font-size: 1.4rem; line-height: 1; display: grid; place-items: center;
+}
+.dist-val { min-width: 92px; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.dist-val small { font-size: 1rem; font-weight: 600; color: var(--muted); margin-left: 3px; }
+.zone { font-size: .8rem; color: var(--muted); }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; min-width: 48px; height: 36px; padding: 0 10px; border-radius: 18px;
+  border: 1px solid var(--line); background: var(--surface); font-family: var(--font-display);
+  font-weight: 600; font-size: 1.05rem; font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+/* Round */
+.round-head { display: flex; align-items: baseline; justify-content: space-between; }
+.tally { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.tally span { color: var(--muted); font-weight: 500; }
+.putters { display: flex; flex-direction: column; gap: 7px; }
+.putter {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 6px 14px;
+  border-radius: var(--radius); border: 1.5px solid var(--line); background: var(--surface); text-align: left;
+  transition: background-color .12s, border-color .12s;
+}
+.putter .disc { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 5px rgba(255,255,255,.28), inset 0 0 0 6px rgba(0,0,0,.12); }
+.putter .pname { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.putter .pname small { display: block; font-weight: 400; font-size: .75rem; color: var(--muted); }
+.putter .state { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.putter .state svg { width: 22px; height: 22px; }
+.putter[aria-pressed="true"] { background: var(--made-soft); border-color: var(--made); }
+.putter[aria-pressed="true"] .state { color: var(--made); }
+.hint { font-size: .8rem; color: var(--muted); margin: 0; }
+
+.actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; position: sticky; bottom: 0; z-index: 2; padding-block: 8px; margin-block: -8px; background: var(--bg); }
+.btn {
+  height: 52px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface);
+  font-weight: 600; padding: 0 14px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; letter-spacing: .02em; }
+.btn.small { height: 40px; font-size: .9rem; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--miss); }
+.btn.danger[data-armed="true"] { background: var(--miss); border-color: var(--miss); color: var(--surface); }
+.btn:disabled { opacity: .45; cursor: default; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.row-btns .btn { flex: 1; }
+
+.panel { background: var(--surface); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpi b { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+@media (max-width: 360px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.bars { display: flex; flex-direction: column; gap: 9px; }
+.bar { display: grid; grid-template-columns: 64px minmax(0, 1fr) 92px; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.bar .bl { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .bt { display: block; height: 12px; border-radius: 6px; background: var(--track); overflow: hidden; }
+.bar .bf { display: block; height: 100%; border-radius: 6px; background: var(--made); }
+.bar .bv { text-align: right; font-size: .85rem; color: var(--muted); white-space: nowrap; }
+.bar .bv b { color: var(--fg); font-family: var(--font-display); font-size: 1.05rem; }
+.bar.putterbar { grid-template-columns: minmax(0, 1fr) 92px; row-gap: 4px; }
+.bar.putterbar .bl { grid-column: 1 / -1; font-family: var(--font-body); font-size: .88rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: .85rem; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+.banner { font-size: .85rem; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); color: var(--fg); }
+.banner b { font-weight: 600; }
+
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 10px; font-family: var(--font-body); }
+.chart .area { fill: var(--made); opacity: .14; }
+.chart .ln { fill: none; stroke: var(--made); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .pt { fill: var(--surface); stroke: var(--made); stroke-width: 1.8; }
+.chart .pt.last { fill: var(--made); }
+.chart .endlbl { fill: var(--fg); font-size: 12px; font-weight: 600; font-family: var(--font-display); }
+
+.sess { display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--surface); border-radius: var(--radius); }
+.card > button.card-h { width: 100%; border: 0; background: transparent; padding: 14px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; text-align: left; }
+.card-h .when { font-weight: 600; }
+.card-h .meta { font-size: .82rem; color: var(--muted); grid-column: 1; }
+.card-h .pct { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-weight: 700; font-size: 1.8rem; font-variant-numeric: tabular-nums; }
+.card-b { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+table.mini { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: .9rem; }
+table.mini th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 4px 0; }
+table.mini td { padding: 5px 0; border-top: 1px solid var(--line); }
+table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: right; }
+.pgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.pcell { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .75rem; color: var(--muted); min-width: 0; }
+.pcell b { font-family: var(--font-display); font-size: 1.15rem; color: var(--fg); font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding: 32px 12px; }
+.empty b { display: block; color: var(--fg); font-family: var(--font-display); font-size: 1.3rem; margin-bottom: 4px; }
+
+.bag-row { display: grid; grid-template-columns: 22px 44px minmax(0, 1fr); gap: 10px; align-items: center; }
+.bag-row .idx { font-family: var(--font-display); font-weight: 700; color: var(--muted); text-align: center; }
+.bag-row input[type="color"] { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; overflow: hidden; }
+.bag-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.bag-row input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.bag-row input[type="color"]::-moz-color-swatch { border: 0; border-radius: 50%; }
+.text-in { width: 100%; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); padding: 0 12px; font-size: 1rem; }
+.note { font-size: .82rem; color: var(--muted); margin: 0; }
+
+.tabs {
+  display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--surface);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+.tabs button { border: 0; background: transparent; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: .72rem; font-weight: 600; color: var(--muted); }
+.tabs svg { width: 22px; height: 22px; }
+.tabs button[aria-current="page"] { color: var(--fg); }
+.tabs button[aria-current="page"] svg { color: var(--made); }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 8px);
+  background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 20px; font-weight: 600; font-size: .9rem;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; white-space: nowrap; z-index: 20;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.pop { animation: pop .35s ease-out; }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pop { animation: none; } .toast, .putter { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 4h15"/><path d="M6 4l2.2 8M10 4l1 8M14 4l-1 8M18 4l-2.2 8"/><path d="M5.5 12h13l-1.6 4H7.1z"/><path d="M12 16v6M8.5 22h7"/></svg>
+      Putting Log
+    </div>
+    <div class="sync" id="sync" data-state="local">On this device</div>
+  </header>
+
+  <main class="view" id="view-practice">
+    <section class="dist" aria-label="Distance">
+      <div class="dist-row">
+        <div>
+          <div class="label">Distance</div>
+          <div class="zone" id="zone">Circle 1X</div>
+        </div>
+        <div class="stepper">
+          <button type="button" id="distDown" aria-label="Step back one">−</button>
+          <div class="dist-val" id="distVal" aria-live="polite">20<small>ft</small></div>
+          <button type="button" id="distUp" aria-label="Step out one">+</button>
+        </div>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Distance presets"></div>
+    </section>
+
+    <section class="dist" aria-label="Current round">
+      <div class="round-head">
+        <h2 id="roundTitle">Round 1</h2>
+        <div class="tally" id="tally">0<span> / 5</span></div>
+      </div>
+      <p class="hint">Throw all five, then tap each putter that went in.</p>
+      <div class="putters" id="putters"></div>
+      <div class="actions">
+        <button type="button" class="btn" id="allIn">All in</button>
+        <button type="button" class="btn primary" id="logRound">Log round</button>
+      </div>
+    </section>
+
+    <section class="panel" id="sessionPanel" aria-label="This session"></section>
+  </main>
+
+  <main class="view" id="view-stats" hidden></main>
+  <main class="view" id="view-history" hidden></main>
+  <main class="view" id="view-bag" hidden></main>
+
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" data-tab="practice" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+      Practice
+    </button>
+    <button type="button" data-tab="stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      Stats
+    </button>
+    <button type="button" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      History
+    </button>
+    <button type="button" data-tab="bag">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="4"/><path d="M3 12v2c0 2.2 4 4 9 4s9-1.8 9-4v-2"/></svg>
+      Bag
+    </button>
+  </nav>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+  const LS_KEY = "putting-log.v1";
+  const FT = 3.28084;
+  const NEW_SESSION_GAP = 3 * 60 * 60 * 1000;
+  const PRESETS = { ft: [10, 15, 20, 25, 30, 33, 40, 50, 66], m: [3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20] };
+  const DEFAULT_COLORS = ["#E5484D", "#F28C28", "#2F80ED", "#8E4EC6", "#12A594"];
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const newId = () => "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+
+  function defaults() {
+    return {
+      settings: { kind: "settings", unit: "ft", putters: DEFAULT_COLORS.map((c, i) => ({ name: "Putter " + (i + 1), color: c })), v: 0 },
+      sessions: {},
+      current: null,
+      dist: 20 / FT,
+      pushed: false,
+    };
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return defaults();
+      const s = Object.assign(defaults(), JSON.parse(raw));
+      if (!s.settings.putters || s.settings.putters.length !== 5) s.settings = defaults().settings;
+      return s;
+    } catch { return defaults(); }
+  }
+  let state = load();
+  function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {} }
+
+  // ---------- units & zones ----------
+  const unit = () => state.settings.unit;
+  const toDisplay = (m) => unit() === "ft" ? Math.round(m * FT) : Math.round(m * 2) / 2;
+  const fromDisplay = (v) => unit() === "ft" ? v / FT : v;
+  const fmtDist = (m) => toDisplay(m) + " " + unit();
+  function zoneOf(m) {
+    if (m < 3.35) return "Circle 1 · inside C1X";
+    if (m <= 10.05) return "Circle 1X";
+    if (m <= 20.05) return "Circle 2";
+    return "Outside the circle";
+  }
+  const pct = (made, n) => n ? Math.round((made / n) * 100) + "%" : "—";
+
+  // ---------- data helpers ----------
+  const sessionsSorted = () => Object.values(state.sessions).filter((s) => s.rounds && s.rounds.length).sort((a, b) => a.start - b.start);
+  function flatten(sessions, since = 0) {
+    const out = [];
+    for (const s of sessions) for (const r of s.rounds) if (r.t >= since) out.push(r);
+    return out.sort((a, b) => a.t - b.t);
+  }
+  function summarize(rounds) {
+    let made = 0, n = 0, run = 0, best = 0, c1xMade = 0, c1xN = 0;
+    const byDist = new Map();
+    const byPutter = [0, 1, 2, 3, 4].map(() => ({ made: 0, n: 0 }));
+    for (const r of rounds) {
+      const key = toDisplay(r.d);
+      if (!byDist.has(key)) byDist.set(key, { key, d: r.d, made: 0, n: 0 });
+      const b = byDist.get(key);
+      r.m.forEach((x, i) => {
+        n++; b.n++; byPutter[i].n++;
+        if (x) { made++; b.made++; byPutter[i].made++; run++; best = Math.max(best, run); } else run = 0;
+        if (r.d >= 3.35 && r.d <= 10.05) { c1xN++; if (x) c1xMade++; }
+      });
+    }
+    return { made, n, best, run, c1xMade, c1xN, byDist: [...byDist.values()].sort((a, b) => a.key - b.key), byPutter, rounds: rounds.length };
+  }
+  function currentSession() {
+    const s = state.current && state.sessions[state.current];
+    if (!s) return null;
+    if (s.rounds.length && Date.now() - s.end > NEW_SESSION_GAP) return null;
+    return s;
+  }
+
+  // ---------- sync (claude.ai artifact db when available, else this device only) ----------
+  let remote = null;
+  const dirty = new Map(); // id -> timer
+  const syncEl = $("sync");
+  function setSync(st) {
+    const text = { local: "On this device", connecting: "Connecting…", synced: "Synced", slow: "Sync delayed", error: "Not synced" }[st];
+    syncEl.dataset.state = st; syncEl.textContent = text;
+  }
+  function queueWrite(id) {
+    if (!remote) return;
+    clearTimeout(dirty.get(id));
+    dirty.set(id, setTimeout(() => flush(id), 700));
+  }
+  async function flush(id) {
+    if (!remote) { dirty.delete(id); return; }
+    const ref = remote.col.doc(id);
+    const body = id === "settings" ? state.settings : state.sessions[id];
+    const stamp = dirty.get(id);
+    try {
+      if (body) await ref.set(clone(body)); else await ref.delete();
+      if (dirty.get(id) === stamp) dirty.delete(id);
+      setSync("synced");
+    } catch (e) {
+      if (dirty.get(id) === stamp) dirty.delete(id);
+      setSync("error");
+      if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) remote = null;
+    }
+  }
+  function applyRemote(snap) {
+    const confirmed = !snap.metadata.fromCache;
+    const seen = new Set();
+    let remoteHasSettings = false;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      if (!data) continue;
+      if (data.kind === "settings") {
+        remoteHasSettings = true;
+        if (!dirty.has("settings") && (data.v || 0) >= (state.settings.v || 0) && Array.isArray(data.putters) && data.putters.length === 5) state.settings = clone(data);
+      } else if (data.kind === "session") {
+        seen.add(doc.id);
+        const local = state.sessions[doc.id];
+        if (!dirty.has(doc.id) && (!local || (data.v || 0) >= (local.v || 0))) state.sessions[doc.id] = clone(data);
+      }
+    }
+    if (confirmed) {
+      if (!state.pushed) {
+        for (const id of Object.keys(state.sessions)) if (!seen.has(id)) queueWrite(id);
+        if (!remoteHasSettings) queueWrite("settings");
+        state.pushed = true;
+      } else {
+        for (const id of Object.keys(state.sessions)) if (!seen.has(id) && !dirty.has(id)) delete state.sessions[id];
+      }
+    }
+    save(); render();
+  }
+  async function initSync() {
+    if (!window.claude || typeof window.claude.use !== "function") return;
+    try {
+      const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+      if (!db || !user) return;
+      const uid = await user.id();
+      if (!uid) return;
+      const col = db.collection("data/users/" + uid);
+      remote = { col };
+      setSync("connecting");
+      const timer = setTimeout(() => { if (syncEl.dataset.state === "connecting") setSync("slow"); }, 10000);
+      col.onSnapshot((snap) => {
+        if (!snap.metadata.fromCache) { clearTimeout(timer); setSync("synced"); }
+        applyRemote(snap);
+      }, () => { clearTimeout(timer); remote = null; setSync("error"); });
+    } catch { remote = null; setSync("local"); }
+  }
+
+  // ---------- practice ----------
+  let marks = [false, false, false, false, false];
+  let tab = "practice";
+
+  function renderPractice() {
+    const d = state.dist;
+    const shown = toDisplay(d);
+    $("distVal").innerHTML = shown + "<small>" + unit() + "</small>";
+    $("zone").textContent = zoneOf(d);
+    $("chips").innerHTML = PRESETS[unit()].map((p) =>
+      `<button type="button" class="chip" data-p="${p}" aria-pressed="${p === shown}">${p}</button>`).join("");
+
+    const s = currentSession();
+    $("roundTitle").textContent = "Round " + ((s ? s.rounds.length : 0) + 1);
+    const count = marks.filter(Boolean).length;
+    $("tally").innerHTML = count + "<span> / 5</span>";
+    $("putters").innerHTML = state.settings.putters.map((p, i) => `
+      <button type="button" class="putter" data-i="${i}" aria-pressed="${marks[i]}" style="--c:${esc(p.color)}">
+        <span class="disc" aria-hidden="true"></span>
+        <span class="pname">${esc(p.name)}<small>Throw ${i + 1}</small></span>
+        <span class="state">${marks[i]
+          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>In`
+          : "Miss"}</span>
+      </button>`).join("");
+    $("allIn").textContent = count === 5 ? "Clear" : "All in";
+
+    const panel = $("sessionPanel");
+    if (!s) {
+      panel.innerHTML = `<div class="label">This session</div><p class="note">A session starts with your first logged round and ends when you tap End session or after three hours without a round.</p>`;
+      return;
+    }
+    const sum = summarize(s.rounds);
+    let curRun = 0;
+    for (const r of [...s.rounds].reverse()) { const ms = [...r.m].reverse(); let stop = false; for (const x of ms) { if (x) curRun++; else { stop = true; break; } } if (stop) break; }
+    panel.innerHTML = `
+      <div class="head-row"><div class="label">This session · started ${timeStr(s.start)}</div></div>
+      <div class="kpis">
+        <div class="kpi"><b>${pct(sum.made, sum.n)}</b><span>Made</span></div>
+        <div class="kpi"><b>${sum.made}/${sum.n}</b><span>Putts</span></div>
+        <div class="kpi"><b>${curRun}</b><span>Run now</span></div>
+        <div class="kpi"><b>${sum.best}</b><span>Best run</span></div>
+      </div>
+      ${distTable(sum.byDist)}
+      <div class="row-btns">
+        <button type="button" class="btn small" id="undo">Undo last round</button>
+        <button type="button" class="btn small ghost" id="endSession">End session</button>
+      </div>`;
+  }
+  function distTable(rows) {
+    if (!rows.length) return "";
+    return `<table class="mini"><thead><tr><th>Distance</th><th>Made</th><th>%</th></tr></thead><tbody>${
+      rows.map((b) => `<tr><td>${b.key} ${unit()}</td><td>${b.made}/${b.n}</td><td>${pct(b.made, b.n)}</td></tr>`).join("")
+    }</tbody></table>`;
+  }
+
+  function setDist(displayVal) {
+    const lim = unit() === "ft" ? [3, 100] : [1, 30];
+    const v = Math.min(lim[1], Math.max(lim[0], displayVal));
+    state.dist = +fromDisplay(v).toFixed(3);
+    save(); renderPractice();
+  }
+
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if (!wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && tab === "practice" && currentSession()) keepAwake(); });
+
+  function logRound() {
+    const now = Date.now();
+    let s = currentSession();
+    if (!s) {
+      s = { kind: "session", id: newId(), start: now, end: now, rounds: [], v: now };
+      state.sessions[s.id] = s;
+      state.current = s.id;
+    }
+    const m = marks.map((x) => (x ? 1 : 0));
+    s.rounds.push({ t: now, d: state.dist, m });
+    s.end = now; s.v = now;
+    marks = [false, false, false, false, false];
+    save(); queueWrite(s.id); renderPractice();
+    const made = m.reduce((a, b) => a + b, 0);
+    toast(made === 5 ? "Clean round · 5/5" : `Logged · ${made}/5 from ${fmtDist(state.dist)}`);
+    const t = $("roundTitle"); t.classList.remove("pop"); void t.offsetWidth; t.classList.add("pop");
+    keepAwake();
+  }
+  function undoRound() {
+    const s = currentSession();
+    if (!s || !s.rounds.length) return;
+    const r = s.rounds.pop();
+    marks = r.m.map(Boolean);
+    state.dist = r.d;
+    if (!s.rounds.length) { delete state.sessions[s.id]; state.current = null; }
+    else { s.end = s.rounds[s.rounds.length - 1].t; s.v = Date.now(); }
+    save(); queueWrite(s.id); renderPractice();
+    toast("Last round removed. Fix it and log again.");
+  }
+
+  // ---------- stats ----------
+  let range = "30";
+  function demoSessions() {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const out = [];
+    const day = 86400000;
+    const base = Date.now() - 24 * day;
+    const dists = [15, 20, 25, 30].map((f) => f / FT);
+    for (let k = 0; k < 9; k++) {
+      const start = base + k * 2.6 * day + 17 * 3600000;
+      const rounds = [];
+      let t = start;
+      for (const d of dists) for (let j = 0; j < 4; j++) {
+        t += 90000;
+        const p = 0.97 - (d * FT - 10) * 0.024 + k * 0.012;
+        rounds.push({ t, d, m: [0, 1, 2, 3, 4].map((i) => (rnd() < p - (i === 2 ? 0.08 : 0) ? 1 : 0)) });
+      }
+      out.push({ id: "demo" + k, start, end: t, rounds });
+    }
+    return out;
+  }
+  function renderStats() {
+    const real = sessionsSorted();
+    const demo = !real.length;
+    const all = demo ? demoSessions() : real;
+    const since = range === "all" ? 0 : Date.now() - (+range) * 86400000;
+    const inRange = all.filter((s) => s.end >= since);
+    const sum = summarize(flatten(inRange, since));
+    const putters = state.settings.putters;
+    const rangeBtns = [["7", "7 days"], ["30", "30 days"], ["all", "All time"]]
+      .map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${range === k}">${l}</button>`).join("");
+
+    let html = `<div class="head-row"><h2>Stats</h2><div class="seg" role="group" aria-label="Time range">${rangeBtns}</div></div>`;
+    if (demo) html += `<div class="banner"><b>Example data.</b> Your own numbers replace this after you log your first round.</div>`;
+    if (!sum.n) {
+      $("view-stats").innerHTML = html + `<div class="empty"><b>No putts in this range</b>Pick a longer range or log a round on the Practice tab.</div>`;
+      return;
+    }
+    html += `<section class="panel">
+      <div class="kpis">
+        <div class="kpi"><b>${pct(sum.made, sum.n)}</b><span>Made</span></div>
+        <div class="kpi"><b>${sum.n}</b><span>Putts</span></div>
+        <div class="kpi"><b>${pct(sum.c1xMade, sum.c1xN)}</b><span>C1X</span></div>
+        <div class="kpi"><b>${sum.best}</b><span>Best run</span></div>
+      </div>
+      <p class="note">C1X counts putts from ${unit() === "ft" ? "11–33 ft" : "3.3–10 m"}. Best run is the most makes in a row.</p>
+    </section>`;
+
+    html += `<section class="panel"><div class="label">By distance</div><div class="bars">${
+      sum.byDist.map((b) => `<div class="bar"><span class="bl">${b.key} ${unit()}</span><span class="bt"><span class="bf" style="width:${b.n ? (b.made / b.n) * 100 : 0}%"></span></span><span class="bv"><b>${pct(b.made, b.n)}</b> · ${b.made}/${b.n}</span></div>`).join("")
+    }</div></section>`;
+
+    html += `<section class="panel"><div class="label">By putter</div><div class="bars">${
+      sum.byPutter.map((b, i) => `<div class="bar putterbar" style="--c:${esc(putters[i].color)}"><span class="bl"><span class="dot"></span><span style="overflow:hidden;text-overflow:ellipsis">${esc(putters[i].name)}</span></span><span class="bt"><span class="bf" style="width:${b.n ? (b.made / b.n) * 100 : 0}%;background:var(--c)"></span></span><span class="bv"><b>${pct(b.made, b.n)}</b> · ${b.made}/${b.n}</span></div>`).join("")
+    }</div><p class="note">Throw order matters too: putter ${worstIdx(sum.byPutter) + 1} is your weakest slot in this range.</p></section>`;
+
+    html += `<section class="panel"><div class="label">Make % by session</div>${trendChart(inRange.slice(-20), since)}</section>`;
+    $("view-stats").innerHTML = html;
+  }
+  function worstIdx(bp) {
+    let w = 0, wv = 2;
+    bp.forEach((b, i) => { if (b.n && b.made / b.n < wv) { wv = b.made / b.n; w = i; } });
+    return w;
+  }
+  function trendChart(sessions, since) {
+    const pts = sessions.map((s) => { const r = summarize(s.rounds.filter((x) => x.t >= since)); return { t: s.start, p: r.n ? r.made / r.n : 0 }; });
+    if (pts.length < 2) return `<p class="note">Log a second session to see your trend.</p>`;
+    const W = 320, H = 150, L = 30, R = 34, T = 10, B = 22;
+    const x = (i) => L + (i * (W - L - R)) / (pts.length - 1);
+    const y = (p) => T + (1 - p) * (H - T - B);
+    const grid = [0, 0.5, 1].map((g) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}"/><text class="axis" x="${L - 6}" y="${y(g) + 3.5}" text-anchor="end">${g * 100}%</text>`).join("");
+    const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.p).toFixed(1)}`).join(" ");
+    const area = `M${x(0)},${y(0)} L${line.replace(/ /g, " L")} L${x(pts.length - 1)},${y(0)} Z`;
+    const dots = pts.map((p, i) => `<circle class="pt${i === pts.length - 1 ? " last" : ""}" cx="${x(i).toFixed(1)}" cy="${y(p.p).toFixed(1)}" r="${i === pts.length - 1 ? 4 : 2.8}"/>`).join("");
+    const last = pts[pts.length - 1];
+    const dfmt = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Make percentage for the last ${pts.length} sessions">
+      ${grid}<path class="area" d="${area}"/><polyline class="ln" points="${line}"/>${dots}
+      <text class="endlbl" x="${x(pts.length - 1) + 7}" y="${y(last.p) + 4}">${Math.round(last.p * 100)}%</text>
+      <text class="axis" x="${L}" y="${H - 6}">${dfmt(pts[0].t)}</text>
+      <text class="axis" x="${W - R}" y="${H - 6}" text-anchor="end">${dfmt(last.t)}</text>
+    </svg>`;
+  }
+
+  // ---------- history ----------
+  const open = new Set();
+  const timeStr = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const dateStr = (t) => new Date(t).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  function renderHistory() {
+    const list = sessionsSorted().reverse();
+    if (!list.length) {
+      $("view-history").innerHTML = `<h2>History</h2><div class="empty"><b>No sessions yet</b>Log a round on the Practice tab and it shows up here.</div>`;
+      return;
+    }
+    const putters = state.settings.putters;
+    $("view-history").innerHTML = `<h2>History</h2><div class="sess">${list.map((s) => {
+      const sum = summarize(s.rounds);
+      const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
+      const isOpen = open.has(s.id);
+      return `<article class="card">
+        <button type="button" class="card-h" data-open="${s.id}" aria-expanded="${isOpen}">
+          <span class="when">${dateStr(s.start)} · ${timeStr(s.start)}</span>
+          <span class="pct">${pct(sum.made, sum.n)}</span>
+          <span class="meta">${sum.rounds} rounds · ${sum.made}/${sum.n} made · ${mins} min · ${sum.byDist.map((b) => b.key).join(", ")} ${unit()}</span>
+        </button>
+        ${isOpen ? `<div class="card-b">
+          ${distTable(sum.byDist)}
+          <div class="pgrid">${sum.byPutter.map((b, i) => `<div class="pcell" style="--c:${esc(putters[i].color)}"><span class="dot"></span><b>${pct(b.made, b.n)}</b><span>${b.made}/${b.n}</span></div>`).join("")}</div>
+          <button type="button" class="btn small danger" data-del="${s.id}">Delete session</button>
+        </div>` : ""}
+      </article>`;
+    }).join("")}</div>`;
+  }
+
+  // ---------- bag / settings ----------
+  function renderBag() {
+    const p = state.settings.putters;
+    const synced = !!remote;
+    $("view-bag").innerHTML = `
+      <h2>Your bag</h2>
+      <section class="panel">
+        <div class="label">Putters, in throwing order</div>
+        ${p.map((x, i) => `<div class="bag-row">
+          <span class="idx">${i + 1}</span>
+          <input type="color" id="pc${i}" data-pc="${i}" value="${esc(x.color)}" aria-label="Color of putter ${i + 1}">
+          <input type="text" class="text-in" id="pn${i}" data-pn="${i}" value="${esc(x.name)}" maxlength="24" aria-label="Name of putter ${i + 1}" placeholder="Putter ${i + 1}">
+        </div>`).join("")}
+        <p class="note">Name each putter by mold and plastic so you can see which one misses most.</p>
+      </section>
+      <section class="panel">
+        <div class="head-row"><div class="label">Distance unit</div>
+          <div class="seg" role="group" aria-label="Distance unit">
+            <button type="button" data-unit="ft" aria-pressed="${unit() === "ft"}">Feet</button>
+            <button type="button" data-unit="m" aria-pressed="${unit() === "m"}">Meters</button>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="label">Your data</div>
+        <p class="note">${synced ? "Saved to your claude.ai account, so it follows you to any device where you open this page." : "Saved in this browser on this device. Copy a backup now and then."}</p>
+        <div class="row-btns">
+          <button type="button" class="btn small" id="copyData">Copy backup</button>
+          <button type="button" class="btn small danger" id="resetAll">Delete all sessions</button>
+        </div>
+        <textarea id="backupOut" class="text-in" rows="3" readonly hidden style="height:auto;padding:8px;font-size:.75rem"></textarea>
+      </section>`;
+  }
+
+  // ---------- shell ----------
+  function render() {
+    renderPractice();
+    if (tab === "stats") renderStats();
+    if (tab === "history") renderHistory();
+    if (tab === "bag" && !document.activeElement?.matches?.("#view-bag input")) renderBag();
+  }
+  function showTab(t) {
+    tab = t;
+    for (const v of ["practice", "stats", "history", "bag"]) $("view-" + v).hidden = v !== t;
+    document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
+    if (t === "stats") renderStats();
+    if (t === "history") renderHistory();
+    if (t === "bag") renderBag();
+    if (t === "practice") renderPractice();
+    $("view-" + t).scrollTop = 0;
+  }
+  let toastTimer;
+  function toast(msg) {
+    const el = $("toast");
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+  }
+  function arm(btn, onConfirm, label) {
+    if (btn.dataset.armed === "true") { onConfirm(); return; }
+    const orig = btn.textContent;
+    btn.dataset.armed = "true"; btn.textContent = label;
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.armed = "false"; btn.textContent = orig; } }, 3500);
+  }
+
+  document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+  $("distDown").addEventListener("click", () => setDist(toDisplay(state.dist) - 1));
+  $("distUp").addEventListener("click", () => setDist(toDisplay(state.dist) + 1));
+  $("chips").addEventListener("click", (e) => { const b = e.target.closest("[data-p]"); if (b) setDist(+b.dataset.p); });
+  $("putters").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-i]"); if (!b) return;
+    const i = +b.dataset.i; marks[i] = !marks[i]; renderPractice();
+    const nb = $("putters").querySelector(`[data-i="${i}"]`); if (nb) nb.focus({ preventScroll: true });
+  });
+  $("allIn").addEventListener("click", () => { const all = marks.every(Boolean); marks = marks.map(() => !all); renderPractice(); });
+  $("logRound").addEventListener("click", logRound);
+  $("sessionPanel").addEventListener("click", (e) => {
+    if (e.target.closest("#undo")) undoRound();
+    if (e.target.closest("#endSession")) { state.current = null; save(); renderPractice(); toast("Session ended. Nice work."); }
+  });
+  $("view-stats").addEventListener("click", (e) => { const b = e.target.closest("[data-range]"); if (b) { range = b.dataset.range; renderStats(); } });
+  $("view-history").addEventListener("click", (e) => {
+    const o = e.target.closest("[data-open]");
+    if (o) { const id = o.dataset.open; open.has(id) ? open.delete(id) : open.add(id); renderHistory(); return; }
+    const d = e.target.closest("[data-del]");
+    if (d) arm(d, () => {
+      const id = d.dataset.del;
+      delete state.sessions[id]; if (state.current === id) state.current = null;
+      save(); queueWrite(id); renderHistory(); renderPractice(); toast("Session deleted");
+    }, "Tap again to delete");
+  });
+  const bag = $("view-bag");
+  let nameTimer;
+  bag.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.dataset.pn != null) {
+      state.settings.putters[+t.dataset.pn].name = t.value.trim() || "Putter " + (+t.dataset.pn + 1);
+    } else if (t.dataset.pc != null) {
+      state.settings.putters[+t.dataset.pc].color = t.value;
+    } else return;
+    state.settings.v = Date.now();
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(() => { save(); queueWrite("settings"); }, 400);
+  });
+  bag.addEventListener("click", async (e) => {
+    const u = e.target.closest("[data-unit]");
+    if (u) { state.settings.unit = u.dataset.unit; state.settings.v = Date.now(); save(); queueWrite("settings"); renderBag(); renderPractice(); return; }
+    if (e.target.closest("#copyData")) {
+      const json = JSON.stringify({ settings: state.settings, sessions: sessionsSorted() });
+      try { await navigator.clipboard.writeText(json); toast("Backup copied"); }
+      catch { const ta = $("backupOut"); ta.hidden = false; ta.value = json; ta.focus(); ta.select(); toast("Select all and copy"); }
+      return;
+    }
+    const r = e.target.closest("#resetAll");
+    if (r) arm(r, () => {
+      for (const id of Object.keys(state.sessions)) { delete state.sessions[id]; queueWrite(id); }
+      state.current = null; save(); renderBag(); renderPractice(); toast("All sessions deleted");
+    }, "Tap again to delete all");
+  });
+
+  renderPractice();
+  initSync();
+  if ("serviceWorker" in navigator && window.__PUTTING_LOG_PWA__) { try { navigator.serviceWorker.register("sw.js"); } catch {} }
+})();
+</script>
