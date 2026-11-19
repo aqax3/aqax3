@@ -184,7 +184,8 @@ table.mini { width: 100%; border-collapse: collapse; font-variant-numeric: tabul
 table.mini th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 4px 0; }
 table.mini td { padding: 5px 0; border-top: 1px solid var(--line); }
 table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: right; }
-.pgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px 6px; }
+.count { min-width: 44px; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 1.8rem; font-variant-numeric: tabular-nums; }
 .pcell { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .75rem; color: var(--muted); min-width: 0; }
 .pcell b { font-family: var(--font-display); font-size: 1.15rem; color: var(--fg); font-variant-numeric: tabular-nums; }
 .empty { text-align: center; color: var(--muted); padding: 32px 12px; }
@@ -251,7 +252,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
         <h2 id="roundTitle">Round 1</h2>
         <div class="tally" id="tally">0<span> / 5</span></div>
       </div>
-      <p class="hint">Throw all five, then tap each putter that went in.</p>
+      <p class="hint" id="hint">Throw all five, then tap each putter that went in.</p>
       <div class="putters" id="putters"></div>
       <div class="actions">
         <button type="button" class="btn" id="allIn">All in</button>
@@ -294,7 +295,9 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   const FT = 3.28084;
   const NEW_SESSION_GAP = 3 * 60 * 60 * 1000;
   const PRESETS = { ft: [10, 15, 20, 25, 30, 33, 40, 50, 66], m: [3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20] };
-  const DEFAULT_COLORS = ["#E5484D", "#F28C28", "#2F80ED", "#8E4EC6", "#12A594"];
+  const DEFAULT_COLORS = ["#E5484D", "#F28C28", "#2F80ED", "#8E4EC6", "#12A594", "#D6409F", "#46A758", "#AD7F58", "#FFC53D", "#5B5BD6"];
+  const MAX_DISCS = 20;
+  const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -303,7 +306,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
 
   function defaults() {
     return {
-      settings: { kind: "settings", unit: "m", putters: DEFAULT_COLORS.map((c, i) => ({ name: "Putter " + (i + 1), color: c })), v: 1 },
+      settings: { kind: "settings", unit: "m", putters: DEFAULT_COLORS.slice(0, 5).map((c, i) => ({ name: "Putter " + (i + 1), color: c })), v: 1 },
       sessions: {},
       current: null,
       dist: 6,
@@ -316,7 +319,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return defaults();
       const s = Object.assign(defaults(), JSON.parse(raw));
-      if (!s.settings.putters || s.settings.putters.length !== 5) s.settings = defaults().settings;
+      if (!Array.isArray(s.settings.putters) || !s.settings.putters.length) s.settings = defaults().settings;
       // Earlier versions started in feet; switch untouched settings to meters.
       if (!s.settings.v) { s.settings.unit = "m"; s.settings.v = 1; s.dist = Math.round(s.dist); }
       return s;
@@ -336,6 +339,9 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     if (m <= 20.05) return "Circle 2";
     return "Outside the circle";
   }
+  const nDiscs = () => state.settings.putters.length;
+  const discInfo = (i) => state.settings.putters[i] || { name: "Putter " + (i + 1) + " (not in set)", color: "#8A969C" };
+  const puttsIn = (s) => s.rounds.reduce((a, r) => a + r.m.length, 0);
   const pct = (made, n) => n ? Math.round((made / n) * 100) + "%" : "—";
 
   // ---------- data helpers ----------
@@ -348,12 +354,13 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   function summarize(rounds) {
     let made = 0, n = 0, run = 0, best = 0, c1xMade = 0, c1xN = 0;
     const byDist = new Map();
-    const byPutter = [0, 1, 2, 3, 4].map(() => ({ made: 0, n: 0 }));
+    const byPutter = Array.from({ length: nDiscs() }, () => ({ made: 0, n: 0 }));
     for (const r of rounds) {
       const key = toDisplay(r.d);
       if (!byDist.has(key)) byDist.set(key, { key, d: r.d, made: 0, n: 0 });
       const b = byDist.get(key);
       r.m.forEach((x, i) => {
+        if (!byPutter[i]) byPutter[i] = { made: 0, n: 0 };
         n++; b.n++; byPutter[i].n++;
         if (x) { made++; b.made++; byPutter[i].made++; run++; best = Math.max(best, run); } else run = 0;
         if (r.d >= 3.35 && r.d <= 10.05) { c1xN++; if (x) c1xMade++; }
@@ -405,7 +412,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       if (!data) continue;
       if (data.kind === "settings") {
         remoteHasSettings = true;
-        if (!dirty.has("settings") && (data.v || 0) >= (state.settings.v || 0) && Array.isArray(data.putters) && data.putters.length === 5) state.settings = clone(data);
+        if (!dirty.has("settings") && (data.v || 0) >= (state.settings.v || 0) && Array.isArray(data.putters) && data.putters.length >= 1) state.settings = clone(data);
       } else if (data.kind === "session") {
         seen.add(doc.id);
         const local = state.sessions[doc.id];
@@ -421,7 +428,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
         for (const id of Object.keys(state.sessions)) if (!seen.has(id) && !dirty.has(id)) delete state.sessions[id];
       }
     }
-    save(); render();
+    fitMarks(); save(); render();
   }
   async function initSync() {
     if (!window.claude || typeof window.claude.use !== "function") return;
@@ -442,7 +449,9 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   }
 
   // ---------- practice ----------
-  let marks = [false, false, false, false, false];
+  let marks = [];
+  function fitMarks() { marks = Array.from({ length: nDiscs() }, (_, i) => !!marks[i]); }
+  fitMarks();
   let tab = "practice";
   let editingGoal = false;
   const GOALS = [50, 100, 150, 200, 300];
@@ -450,16 +459,18 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   function renderGoal() {
     const s = currentSession();
     const goal = s ? (s.goal || 0) : state.nextGoal;
-    const putts = s ? s.rounds.length * 5 : 0;
+    const putts = s ? puttsIn(s) : 0;
+    const n = nDiscs();
+    const roundsLeft = Math.ceil(Math.max(0, goal - putts) / n);
     const made = s ? s.rounds.reduce((a, r) => a + r.m.reduce((x, y) => x + y, 0), 0) : 0;
     const done = goal > 0 && putts >= goal;
     const box = $("goalBox");
     box.dataset.done = done;
     const showChips = !s || editingGoal;
     let sub;
-    if (!s) sub = `<span>${goal ? `${goal / 5} rounds of 5 putts. Starts with your first round.` : "No target. Starts with your first round."}</span>`;
+    if (!s) sub = `<span>${goal ? `${roundsLeft} rounds of ${n} putts. Starts with your first round.` : "No target. Starts with your first round."}</span>`;
     else if (done) sub = `<span><strong>Goal reached</strong> · ${pct(made, putts)} made</span><button type="button" class="linkbtn" data-finish>Finish session</button>`;
-    else if (goal) sub = `<span>${(goal - putts) / 5} rounds left · ${pct(made, putts)} made</span><button type="button" class="linkbtn" data-editgoal>${editingGoal ? "Done" : "Change goal"}</button>`;
+    else if (goal) sub = `<span>${roundsLeft} ${roundsLeft === 1 ? "round" : "rounds"} left · ${pct(made, putts)} made</span><button type="button" class="linkbtn" data-editgoal>${editingGoal ? "Done" : "Change goal"}</button>`;
     else sub = `<span>${pct(made, putts)} made</span><button type="button" class="linkbtn" data-editgoal>${editingGoal ? "Done" : "Set a goal"}</button>`;
     box.innerHTML = `
       <div class="goal-row">
@@ -493,10 +504,13 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
 
     const s = currentSession();
     const nextRound = (s ? s.rounds.length : 0) + 1;
-    const goalRounds = (s ? s.goal || 0 : state.nextGoal) / 5;
+    const goal = s ? s.goal || 0 : state.nextGoal;
+    const goalRounds = goal ? nextRound - 1 + Math.ceil(Math.max(0, goal - (s ? puttsIn(s) : 0)) / nDiscs()) : 0;
     $("roundTitle").textContent = goalRounds && nextRound <= goalRounds ? `Round ${nextRound} of ${goalRounds}` : "Round " + nextRound;
     const count = marks.filter(Boolean).length;
-    $("tally").innerHTML = count + "<span> / 5</span>";
+    const n = nDiscs();
+    $("tally").innerHTML = count + "<span> / " + n + "</span>";
+    $("hint").textContent = n === 1 ? "Throw your putter, then tap it if it went in." : `Throw all ${WORDS[n] || n}, then tap each putter that went in.`;
     $("putters").innerHTML = state.settings.putters.map((p, i) => `
       <button type="button" class="putter" data-i="${i}" aria-pressed="${marks[i]}" style="--c:${esc(p.color)}">
         <span class="disc" aria-hidden="true"></span>
@@ -505,7 +519,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
           ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>In`
           : "Miss"}</span>
       </button>`).join("");
-    $("allIn").textContent = count === 5 ? "Clear" : "All in";
+    $("allIn").textContent = count === n ? "Clear" : "All in";
 
     const panel = $("sessionPanel");
     if (!s) {
@@ -561,14 +575,15 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     const m = marks.map((x) => (x ? 1 : 0));
     s.rounds.push({ t: now, d: state.dist, m });
     s.end = now; s.v = now;
-    marks = [false, false, false, false, false];
+    marks = [];
+    fitMarks();
     save(); queueWrite(s.id); renderPractice();
     const made = m.reduce((a, b) => a + b, 0);
-    const putts = s.rounds.length * 5;
-    if (s.goal && putts >= s.goal && putts - 5 < s.goal) {
+    const putts = puttsIn(s);
+    if (s.goal && putts >= s.goal && putts - m.length < s.goal) {
       const sum = summarize(s.rounds);
       toast(`Goal reached · ${s.goal} putts · ${pct(sum.made, sum.n)} made`);
-    } else toast(made === 5 ? "Clean round · 5/5" : `Logged · ${made}/5 from ${fmtDist(state.dist)}`);
+    } else toast(made === m.length && m.length > 1 ? `Clean round · ${made}/${made}` : `Logged · ${made}/${m.length} from ${fmtDist(state.dist)}`);
     const t = $("roundTitle"); t.classList.remove("pop"); void t.offsetWidth; t.classList.add("pop");
     keepAwake();
   }
@@ -577,6 +592,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     if (!s || !s.rounds.length) return;
     const r = s.rounds.pop();
     marks = r.m.map(Boolean);
+    fitMarks();
     state.dist = r.d;
     if (!s.rounds.length) { delete state.sessions[s.id]; state.current = null; }
     else { s.end = s.rounds[s.rounds.length - 1].t; s.v = Date.now(); }
@@ -600,7 +616,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       for (const d of dists) for (let j = 0; j < 4; j++) {
         t += 90000;
         const p = 0.97 - (d * FT - 10) * 0.024 + k * 0.012;
-        rounds.push({ t, d, m: [0, 1, 2, 3, 4].map((i) => (rnd() < p - (i === 2 ? 0.08 : 0) ? 1 : 0)) });
+        rounds.push({ t, d, m: Array.from({ length: nDiscs() }, (_, i) => i).map((i) => (rnd() < p - (i === 2 ? 0.08 : 0) ? 1 : 0)) });
       }
       out.push({ id: "demo" + k, start, end: t, rounds });
     }
@@ -613,7 +629,6 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     const since = range === "all" ? 0 : Date.now() - (+range) * 86400000;
     const inRange = all.filter((s) => s.end >= since);
     const sum = summarize(flatten(inRange, since));
-    const putters = state.settings.putters;
     const rangeBtns = [["7", "7 days"], ["30", "30 days"], ["all", "All time"]]
       .map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${range === k}">${l}</button>`).join("");
 
@@ -638,8 +653,8 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     }</div></section>`;
 
     html += `<section class="panel"><div class="label">By putter</div><div class="bars">${
-      sum.byPutter.map((b, i) => `<div class="bar putterbar" style="--c:${esc(putters[i].color)}"><span class="bl"><span class="dot"></span><span style="overflow:hidden;text-overflow:ellipsis">${esc(putters[i].name)}</span></span><span class="bt"><span class="bf" style="width:${b.n ? (b.made / b.n) * 100 : 0}%;background:var(--c)"></span></span><span class="bv"><b>${pct(b.made, b.n)}</b> · ${b.made}/${b.n}</span></div>`).join("")
-    }</div><p class="note">Throw order matters too: putter ${worstIdx(sum.byPutter) + 1} is your weakest slot in this range.</p></section>`;
+      sum.byPutter.map((b, i) => `<div class="bar putterbar" style="--c:${esc(discInfo(i).color)}"><span class="bl"><span class="dot"></span><span style="overflow:hidden;text-overflow:ellipsis">${esc(discInfo(i).name)}</span></span><span class="bt"><span class="bf" style="width:${b.n ? (b.made / b.n) * 100 : 0}%;background:var(--c)"></span></span><span class="bv"><b>${pct(b.made, b.n)}</b> · ${b.made}/${b.n}</span></div>`).join("")
+    }</div>${sum.byPutter.length > 1 ? `<p class="note">Lowest make % in this range: ${esc(discInfo(worstIdx(sum.byPutter)).name)}, throw ${worstIdx(sum.byPutter) + 1}.</p>` : ""}</section>`;
 
     html += `<section class="panel"><div class="label">Make % by session</div>${trendChart(inRange.slice(-20), since)}</section>`;
     $("view-stats").innerHTML = html;
@@ -679,7 +694,6 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       $("view-history").innerHTML = `<h2>History</h2><div class="empty"><b>No sessions yet</b>Log a round on the Practice tab and it shows up here.</div>`;
       return;
     }
-    const putters = state.settings.putters;
     $("view-history").innerHTML = `<h2>History</h2><div class="sess">${list.map((s) => {
       const sum = summarize(s.rounds);
       const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
@@ -692,7 +706,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
         </button>
         ${isOpen ? `<div class="card-b">
           ${distTable(sum.byDist)}
-          <div class="pgrid">${sum.byPutter.map((b, i) => `<div class="pcell" style="--c:${esc(putters[i].color)}"><span class="dot"></span><b>${pct(b.made, b.n)}</b><span>${b.made}/${b.n}</span></div>`).join("")}</div>
+          <div class="pgrid">${sum.byPutter.map((b, i) => `<div class="pcell" style="--c:${esc(discInfo(i).color)}" title="${esc(discInfo(i).name)}"><span class="dot"></span><b>${pct(b.made, b.n)}</b><span>${b.made}/${b.n}</span></div>`).join("")}</div>
           <button type="button" class="btn small danger" data-del="${s.id}">Delete session</button>
         </div>` : ""}
       </article>`;
@@ -706,6 +720,14 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     $("view-bag").innerHTML = `
       <h2>Your bag</h2>
       <section class="panel">
+        <div class="head-row">
+          <div class="label">Discs in your set</div>
+          <div class="stepper">
+            <button type="button" data-count="-1" aria-label="Remove the last disc" ${p.length <= 1 ? "disabled" : ""}>−</button>
+            <span class="count" aria-live="polite">${p.length}</span>
+            <button type="button" data-count="1" aria-label="Add a disc" ${p.length >= MAX_DISCS ? "disabled" : ""}>+</button>
+          </div>
+        </div>
         <div class="label">Putters, in throwing order</div>
         ${p.map((x, i) => `<div class="bag-row">
           <span class="idx">${i + 1}</span>
@@ -810,6 +832,15 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   });
   bag.addEventListener("click", async (e) => {
     const u = e.target.closest("[data-unit]");
+    const c = e.target.closest("[data-count]");
+    if (c) {
+      const list = state.settings.putters;
+      if (+c.dataset.count > 0 && list.length < MAX_DISCS) list.push({ name: "Putter " + (list.length + 1), color: DEFAULT_COLORS[list.length % DEFAULT_COLORS.length] });
+      else if (+c.dataset.count < 0 && list.length > 1) list.pop();
+      else return;
+      state.settings.v = Date.now(); fitMarks(); save(); queueWrite("settings"); renderBag(); renderPractice();
+      return;
+    }
     if (u) { state.settings.unit = u.dataset.unit; state.settings.v = Date.now(); save(); queueWrite("settings"); renderBag(); renderPractice(); return; }
     if (e.target.closest("#copyData")) {
       const json = JSON.stringify({ settings: state.settings, sessions: sessionsSorted() });
