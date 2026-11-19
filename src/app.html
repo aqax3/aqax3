@@ -91,6 +91,20 @@ h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; mar
 }
 .chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 
+/* Session goal */
+.goal { background: var(--surface); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.goal-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.goal-count { font-family: var(--font-display); font-size: 1.05rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.goal-count b { font-size: 1.7rem; font-weight: 700; color: var(--fg); }
+.gbar { display: block; height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
+.gbar span { display: block; height: 100%; border-radius: 5px; background: var(--made); transition: width .25s ease-out; }
+.goal[data-done="true"] .gbar span { background: var(--accent); }
+.goal-sub { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .82rem; color: var(--muted); }
+.goal[data-done="true"] .goal-sub strong { color: var(--fg); }
+.linkbtn { border: 0; background: none; padding: 6px 0; font-weight: 600; font-size: .85rem; color: var(--made); }
+.goal .chips .chip { height: 34px; }
+@media (prefers-reduced-motion: reduce) { .gbar span { transition: none; } }
+
 /* Round */
 .round-head { display: flex; align-items: baseline; justify-content: space-between; }
 .tally { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
@@ -215,6 +229,8 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   </header>
 
   <main class="view" id="view-practice">
+    <section class="goal" id="goalBox" aria-label="Session goal"></section>
+
     <section class="dist" aria-label="Distance">
       <div class="dist-row">
         <div>
@@ -287,10 +303,11 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
 
   function defaults() {
     return {
-      settings: { kind: "settings", unit: "ft", putters: DEFAULT_COLORS.map((c, i) => ({ name: "Putter " + (i + 1), color: c })), v: 0 },
+      settings: { kind: "settings", unit: "m", putters: DEFAULT_COLORS.map((c, i) => ({ name: "Putter " + (i + 1), color: c })), v: 1 },
       sessions: {},
       current: null,
-      dist: 20 / FT,
+      dist: 6,
+      nextGoal: 100,
       pushed: false,
     };
   }
@@ -300,6 +317,8 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       if (!raw) return defaults();
       const s = Object.assign(defaults(), JSON.parse(raw));
       if (!s.settings.putters || s.settings.putters.length !== 5) s.settings = defaults().settings;
+      // Earlier versions started in feet; switch untouched settings to meters.
+      if (!s.settings.v) { s.settings.unit = "m"; s.settings.v = 1; s.dist = Math.round(s.dist); }
       return s;
     } catch { return defaults(); }
   }
@@ -425,8 +444,46 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   // ---------- practice ----------
   let marks = [false, false, false, false, false];
   let tab = "practice";
+  let editingGoal = false;
+  const GOALS = [50, 100, 150, 200, 300];
+
+  function renderGoal() {
+    const s = currentSession();
+    const goal = s ? (s.goal || 0) : state.nextGoal;
+    const putts = s ? s.rounds.length * 5 : 0;
+    const made = s ? s.rounds.reduce((a, r) => a + r.m.reduce((x, y) => x + y, 0), 0) : 0;
+    const done = goal > 0 && putts >= goal;
+    const box = $("goalBox");
+    box.dataset.done = done;
+    const showChips = !s || editingGoal;
+    let sub;
+    if (!s) sub = `<span>${goal ? `${goal / 5} rounds of 5 putts. Starts with your first round.` : "No target. Starts with your first round."}</span>`;
+    else if (done) sub = `<span><strong>Goal reached</strong> · ${pct(made, putts)} made</span><button type="button" class="linkbtn" data-finish>Finish session</button>`;
+    else if (goal) sub = `<span>${(goal - putts) / 5} rounds left · ${pct(made, putts)} made</span><button type="button" class="linkbtn" data-editgoal>${editingGoal ? "Done" : "Change goal"}</button>`;
+    else sub = `<span>${pct(made, putts)} made</span><button type="button" class="linkbtn" data-editgoal>${editingGoal ? "Done" : "Set a goal"}</button>`;
+    box.innerHTML = `
+      <div class="goal-row">
+        <div class="label">${s ? "Session goal" : "Next session goal"}</div>
+        <div class="goal-count">${goal ? `<b>${putts}</b> / ${goal} putts` : `<b>${putts}</b> putts`}</div>
+      </div>
+      ${goal ? `<span class="gbar" role="progressbar" aria-valuemin="0" aria-valuemax="${goal}" aria-valuenow="${Math.min(putts, goal)}" aria-label="Putts toward goal"><span style="width:${Math.min(100, (putts / goal) * 100)}%"></span></span>` : ""}
+      ${showChips ? `<div class="chips" role="group" aria-label="Putts in session">${
+        [0, ...GOALS].map((g) => `<button type="button" class="chip" data-goal="${g}" aria-pressed="${g === goal}">${g || "No goal"}</button>`).join("")
+      }</div>` : ""}
+      <div class="goal-sub">${sub}</div>`;
+  }
+  function setGoal(g) {
+    state.nextGoal = g;
+    const s = currentSession();
+    if (s) { s.goal = g; s.v = Date.now(); queueWrite(s.id); editingGoal = false; }
+    save(); renderPractice();
+  }
+  function endSession(msg) {
+    state.current = null; editingGoal = false; save(); renderPractice(); toast(msg);
+  }
 
   function renderPractice() {
+    renderGoal();
     const d = state.dist;
     const shown = toDisplay(d);
     $("distVal").innerHTML = shown + "<small>" + unit() + "</small>";
@@ -435,7 +492,9 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
       `<button type="button" class="chip" data-p="${p}" aria-pressed="${p === shown}">${p}</button>`).join("");
 
     const s = currentSession();
-    $("roundTitle").textContent = "Round " + ((s ? s.rounds.length : 0) + 1);
+    const nextRound = (s ? s.rounds.length : 0) + 1;
+    const goalRounds = (s ? s.goal || 0 : state.nextGoal) / 5;
+    $("roundTitle").textContent = goalRounds && nextRound <= goalRounds ? `Round ${nextRound} of ${goalRounds}` : "Round " + nextRound;
     const count = marks.filter(Boolean).length;
     $("tally").innerHTML = count + "<span> / 5</span>";
     $("putters").innerHTML = state.settings.putters.map((p, i) => `
@@ -450,7 +509,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
 
     const panel = $("sessionPanel");
     if (!s) {
-      panel.innerHTML = `<div class="label">This session</div><p class="note">A session starts with your first logged round and ends when you tap End session or after three hours without a round.</p>`;
+      panel.innerHTML = `<div class="label">This session</div><p class="note">A session starts with your first logged round. It ends when you tap Finish or End session, or after three hours without a round.</p>`;
       return;
     }
     const sum = summarize(s.rounds);
@@ -494,9 +553,10 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     const now = Date.now();
     let s = currentSession();
     if (!s) {
-      s = { kind: "session", id: newId(), start: now, end: now, rounds: [], v: now };
+      s = { kind: "session", id: newId(), start: now, end: now, rounds: [], goal: state.nextGoal || 0, v: now };
       state.sessions[s.id] = s;
       state.current = s.id;
+      editingGoal = false;
     }
     const m = marks.map((x) => (x ? 1 : 0));
     s.rounds.push({ t: now, d: state.dist, m });
@@ -504,7 +564,11 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
     marks = [false, false, false, false, false];
     save(); queueWrite(s.id); renderPractice();
     const made = m.reduce((a, b) => a + b, 0);
-    toast(made === 5 ? "Clean round · 5/5" : `Logged · ${made}/5 from ${fmtDist(state.dist)}`);
+    const putts = s.rounds.length * 5;
+    if (s.goal && putts >= s.goal && putts - 5 < s.goal) {
+      const sum = summarize(s.rounds);
+      toast(`Goal reached · ${s.goal} putts · ${pct(sum.made, sum.n)} made`);
+    } else toast(made === 5 ? "Clean round · 5/5" : `Logged · ${made}/5 from ${fmtDist(state.dist)}`);
     const t = $("roundTitle"); t.classList.remove("pop"); void t.offsetWidth; t.classList.add("pop");
     keepAwake();
   }
@@ -624,7 +688,7 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
         <button type="button" class="card-h" data-open="${s.id}" aria-expanded="${isOpen}">
           <span class="when">${dateStr(s.start)} · ${timeStr(s.start)}</span>
           <span class="pct">${pct(sum.made, sum.n)}</span>
-          <span class="meta">${sum.rounds} rounds · ${sum.made}/${sum.n} made · ${mins} min · ${sum.byDist.map((b) => b.key).join(", ")} ${unit()}</span>
+          <span class="meta">${s.goal ? `${sum.n >= s.goal ? "✓ " : ""}${sum.n}/${s.goal} putt goal · ` : ""}${sum.made}/${sum.n} made · ${mins} min · ${sum.byDist.map((b) => b.key).join(", ")} ${unit()}</span>
         </button>
         ${isOpen ? `<div class="card-b">
           ${distTable(sum.byDist)}
@@ -712,7 +776,13 @@ table.mini td:not(:first-child), table.mini th:not(:first-child) { text-align: r
   $("logRound").addEventListener("click", logRound);
   $("sessionPanel").addEventListener("click", (e) => {
     if (e.target.closest("#undo")) undoRound();
-    if (e.target.closest("#endSession")) { state.current = null; save(); renderPractice(); toast("Session ended. Nice work."); }
+    if (e.target.closest("#endSession")) endSession("Session ended. Nice work.");
+  });
+  $("goalBox").addEventListener("click", (e) => {
+    const g = e.target.closest("[data-goal]");
+    if (g) { setGoal(+g.dataset.goal); return; }
+    if (e.target.closest("[data-editgoal]")) { editingGoal = !editingGoal; renderGoal(); return; }
+    if (e.target.closest("[data-finish]")) endSession("Session saved to History.");
   });
   $("view-stats").addEventListener("click", (e) => { const b = e.target.closest("[data-range]"); if (b) { range = b.dataset.range; renderStats(); } });
   $("view-history").addEventListener("click", (e) => {

@@ -2,7 +2,8 @@
 
 A phone app for disc golf putting practice with a set of five putters.
 
-- **Practice:** pick a distance (feet or meters, with presets out to Circle 2), throw all five putters, tap each one that went in, then tap **Log round**. Made a mistake? **Undo last round** puts the round back so you can fix it.
+- **Session goals:** pick how many putts the session is (50, 100, 150, 200, 300 or no goal). A progress bar and the round heading ("Round 12 of 20") show how far along you are, and the app tells you when you hit the goal.
+- **Practice:** pick a distance (meters by default, feet optional; presets out to Circle 2), throw all five putters, tap each one that went in, then tap **Log round**. Made a mistake? **Undo last round** puts the round back so you can fix it.
 - **Stats:** make % overall, by distance, by putter (shows which disc or throw slot misses most), C1X %, longest run of makes, and your trend per session. Filter by 7 days, 30 days or all time.
 - **History:** every session with a breakdown by distance and by putter.
 - **Bag:** name and color your five putters, switch feet/meters, copy a JSON backup.
